@@ -6,5 +6,5 @@
 ## Phương trình vô nghiệm
 ![result](lab2_1(1).png)
 
-## PHương trình vô số nghiệm
+## Phương trình vô số nghiệm
 ![result](lab2_1(2).png)
