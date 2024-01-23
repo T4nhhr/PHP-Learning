@@ -12,13 +12,77 @@
 
     <?php
 
-    $studentList = array(
-        array('id' => 1, 'name' => 'Nguyen Van A', 'mobile' => '0123456789', 'email' => 'a@example.com'),
-        array('id' => 2, 'name' => 'Tran Thi B', 'mobile' => '0987654321', 'email' => 'b@example.com'),
-        array('id' => 3, 'name' => 'Le Van C', 'mobile' => '0365478962', 'email' => 'c@example.com'),
-        array('id' => 4, 'name' => 'Pham Thi D', 'mobile' => '0543217896', 'email' => 'd@example.com'),
-        array('id' => 5, 'name' => 'Vo Van E', 'mobile' => '0789456123', 'email' => 'e@example.com'),
-    );
+    $servername = "localhost";
+    $username = "root";
+    $password = "";
+    $dbname = "student_management";
+    $initialDataInserted = false;
+    try {
+        $conn = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+        $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        // Create the database if it doesn't exist
+        $checkDatabaseQuery = "SHOW DATABASES LIKE '$dbname'";
+        $result = $conn->query($checkDatabaseQuery);
+
+        if ($result->rowCount() == 0) {
+            $createDatabaseQuery = "CREATE DATABASE $dbname";
+            $conn->exec($createDatabaseQuery);
+        }
+
+        $conn->exec("USE $dbname");
+
+        // if table not created then do it
+        $checkTableQuery = "SHOW TABLES LIKE 'students'";
+        $result = $conn->query($checkTableQuery);
+        if ($result->rowCount() == 0) {
+            $createTableQuery = "
+            CREATE TABLE students (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                mobile VARCHAR(20) NOT NULL,
+                email VARCHAR(255) NOT NULL
+            )
+        ";
+            $initialDataInserted = true;
+            $conn->exec($createTableQuery);
+        }
+
+        $studentList = array(
+            array('id' => 1, 'name' => 'Nguyen Van A', 'mobile' => '0123456789', 'email' => 'a@example.com'),
+            array('id' => 2, 'name' => 'Tran Thi B', 'mobile' => '0987654321', 'email' => 'b@example.com'),
+            array('id' => 3, 'name' => 'Le Van C', 'mobile' => '0365478962', 'email' => 'c@example.com'),
+            array('id' => 4, 'name' => 'Pham Thi D', 'mobile' => '0543217896', 'email' => 'd@example.com'),
+            array('id' => 5, 'name' => 'Vo Van E', 'mobile' => '0789456123', 'email' => 'e@example.com'),
+        );
+
+        //insert data to table
+        if ($initialDataInserted) {
+            foreach ($studentList as $student) {
+                $name = $student['name'];
+                $mobile = $student['mobile'];
+                $email = $student['email'];
+
+                $sql = "INSERT INTO students (name, mobile, email) VALUES (:name, :mobile, :email)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bindParam(':name', $name);
+                $stmt->bindParam(':mobile', $mobile);
+                $stmt->bindParam(':email', $email);
+
+                $stmt->execute();
+            }
+        }
+
+    } catch (PDOException $e) {
+        echo "Connection failed: " . $e->getMessage();
+    }
+
+    function fetchStudentList()
+    {
+        global $conn;
+        $stmt = $conn->query("SELECT * FROM students");
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     function showDetails($student)
     {
@@ -42,32 +106,42 @@
 
     function addStudent($name, $mobile, $email)
     {
-        global $studentList;
-        $newStudentId = count($studentList) + 1;
-        $newStudent = array('id' => $newStudentId, 'name' => $name, 'mobile' => $mobile, 'email' => $email);
-        array_push($studentList, $newStudent);
+        global $conn;
+
+        $sql = "INSERT INTO students (name, mobile, email) VALUES (:name, :mobile, :email)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bindParam(':name', $name);
+        $stmt->bindParam(':mobile', $mobile);
+        $stmt->bindParam(':email', $email);
+
+        $stmt->execute();
     }
 
     function editStudent($id, $name, $mobile, $email)
     {
-        global $studentList;
-        foreach ($studentList as &$student) {
-            if ($student['id'] == $id) {
-                $student['name'] = $name;
-                $student['mobile'] = $mobile;
-                $student['email'] = $email;
-                break;
-            }
-        }
+        global $conn;
+
+        $sql = "UPDATE students SET name=:name, mobile=:mobile, email=:email WHERE id=:id";
+        $stmt = $conn->prepare($sql);
+        $stmt->bindParam(':name', $name);
+        $stmt->bindParam(':mobile', $mobile);
+        $stmt->bindParam(':email', $email);
+        $stmt->bindParam(':id', $id);
+
+        $stmt->execute();
     }
 
     function deleteStudent($id)
     {
-        global $studentList;
-        $studentList = array_values(array_filter($studentList, function ($student) use ($id) {
-            return $student['id'] != $id;
-        }));
+        global $conn;
+
+        $sql = "DELETE FROM students WHERE id=:id";
+        $stmt = $conn->prepare($sql);
+        $stmt->bindParam(':id', $id);
+
+        $stmt->execute();
     }
+
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['action'])) {
@@ -79,6 +153,8 @@
                     $mobile = $_POST['mobile'];
                     $email = $_POST['email'];
                     addStudent($name, $mobile, $email);
+                    $studentList = fetchStudentList();
+                    header("Location: " . $_SERVER['PHP_SELF']);
                     break;
 
                 case 'edit':
@@ -87,11 +163,13 @@
                     $mobile = $_POST['mobile'];
                     $email = $_POST['email'];
                     editStudent($id, $name, $mobile, $email);
+                    $studentList = fetchStudentList();
                     break;
 
                 case 'delete':
                     $id = $_POST['id'];
                     deleteStudent($id);
+                    $studentList = fetchStudentList();
                     break;
 
             }
@@ -103,6 +181,7 @@
     echo "<table class='table table-striped'>";
     echo "<thead><tr><th>ID</th><th>Name</th><th>Mobile</th><th>Email</th><th>Action</th></tr></thead><tbody>";
 
+    $studentList = fetchStudentList();
     foreach ($studentList as $student) {
         echo "<tr>";
         echo "<td>{$student['id']}</td>";
@@ -155,6 +234,8 @@
 
     echo "</tbody></table>";
     echo "</div>";
+
+    $conn = null;
     ?>
 
     <!-- Add Student Modal -->
